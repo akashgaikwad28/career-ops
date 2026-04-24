@@ -87,19 +87,32 @@ function parseGreenhouse(json, companyName) {
 
 function parseAshby(json, companyName) {
   const jobs = json.jobs || [];
+  const INTERVAL_MULTIPLIERS = {
+    '1 HOUR': 2080,
+    '1 DAY': 260,
+    '1 WEEK': 52,
+    '1 MONTH': 12,
+    '1 YEAR': 1
+  };
+
   return jobs.map(j => {
     const compensation = Array.isArray(j.compensation) ? j.compensation : [];
-    const comp = compensation.find(c => c.compensationType === 'Salary' && c.interval === '1 YEAR');
+    // Find any salary compensation we can normalize
+    const comp = compensation.find(c => c.compensationType === 'Salary' && INTERVAL_MULTIPLIERS[c.interval]);
+    
+    if (!comp) return { title: j.title || '', url: j.jobUrl || '', company: companyName, location: j.location || '', salary: null };
+
+    const mult = INTERVAL_MULTIPLIERS[comp.interval];
     return {
       title: j.title || '',
       url: j.jobUrl || '',
       company: companyName,
       location: j.location || '',
-      salary: comp ? { 
-        min: comp.minValue, 
-        max: comp.maxValue, 
+      salary: { 
+        min: comp.minValue ? comp.minValue * mult : null, 
+        max: comp.maxValue ? comp.maxValue * mult : null, 
         currency: comp.currencyCode 
-      } : null
+      }
     };
   });
 }
@@ -165,6 +178,9 @@ function buildLocationFilter(config) {
     if (remoteOnly && !isRemote) return false;
     if (onsiteOnly && isRemote) return false;
 
+    // Short-circuit: if it's remote and user wants remote, keep it regardless of city keywords
+    if (remoteOnly && isRemote) return true;
+
     const hasPositive = positive.length === 0 || positive.some(k => lower.includes(k));
     const hasNegative = negative.some(k => lower.includes(k));
 
@@ -188,8 +204,8 @@ function buildSalaryFilter(config) {
       return true; // Don't filter if currencies don't match (conservative)
     }
 
-    const jobMin = salary.min || 0;
-    const jobMax = salary.max || 0;
+    const jobMin = salary.min || salary.max || 0;
+    const jobMax = salary.max || salary.min || 0;
 
     // Range-aware logic (CodeRabbit suggestion):
     // If the job's TOP salary is below our MIN, discard.
