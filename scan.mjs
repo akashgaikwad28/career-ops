@@ -81,6 +81,7 @@ function parseGreenhouse(json, companyName) {
     url: j.absolute_url || '',
     company: companyName,
     location: j.location?.name || '',
+    salary: null
   }));
 }
 
@@ -175,7 +176,7 @@ function buildSalaryFilter(config) {
 
   return (salary) => {
     if (min === 0 && max === 0) return true; // Filter disabled
-    if (!salary) return false; // Salary expected but missing
+    if (!salary) return true; // Keep the job if salary data is missing (e.g. Greenhouse/Lever)
 
     // Currency check (if both have currency, they must match)
     if (currency && salary.currency && currency !== salary.currency) {
