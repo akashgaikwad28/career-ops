@@ -94,7 +94,11 @@ function parseAshby(json, companyName) {
       url: j.jobUrl || '',
       company: companyName,
       location: j.location || '',
-      salary: comp ? { value: comp.minValue || comp.maxValue, currency: comp.currencyCode } : null
+      salary: comp ? { 
+        min: comp.minValue, 
+        max: comp.maxValue, 
+        currency: comp.currencyCode 
+      } : null
     };
   });
 }
@@ -167,14 +171,26 @@ function buildLocationFilter(config) {
 function buildSalaryFilter(config) {
   const min = Number(config?.min) || 0;
   const max = Number(config?.max) || 0;
+  const currency = config?.currency || "";
 
   return (salary) => {
     if (min === 0 && max === 0) return true; // Filter disabled
     if (!salary) return false; // Salary expected but missing
 
-    const val = Number(salary.value) || 0;
-    if (min > 0 && val < min) return false;
-    if (max > 0 && val > max) return false;
+    // Currency check (if both have currency, they must match)
+    if (currency && salary.currency && currency !== salary.currency) {
+      return true; // Don't filter if currencies don't match (conservative)
+    }
+
+    const jobMin = salary.min || 0;
+    const jobMax = salary.max || 0;
+
+    // Range-aware logic (CodeRabbit suggestion):
+    // If the job's TOP salary is below our MIN, discard.
+    if (min > 0 && jobMax > 0 && jobMax < min) return false;
+    
+    // If the job's BOTTOM salary is above our MAX, discard.
+    if (max > 0 && jobMin > 0 && jobMin > max) return false;
 
     return true;
   };
