@@ -32,6 +32,27 @@ mkdirSync('data', { recursive: true });
 const CONCURRENCY = 10;
 const FETCH_TIMEOUT_MS = 15_000;
 
+// ── Constants ───────────────────────────────────────────────────────
+
+const REMOTE_SYNONYMS = [
+  "remote", "distributed", "anywhere", "worldwide", "wfh", "work from home",
+  "wfa", "work from anywhere", "virtual", "telecommute", "location independent",
+  "flexible location"
+];
+
+const INTERVAL_MULTIPLIERS = {
+  '1 HOUR': 2080,
+  '1 DAY': 260,
+  '1 WEEK': 52,
+  '2 WEEK': 26,
+  '0.5 MONTH': 24,
+  '1 MONTH': 12,
+  '2 MONTH': 6,
+  '3 MONTH': 4,
+  '6 MONTH': 2,
+  '1 YEAR': 1
+};
+
 // ── API detection ───────────────────────────────────────────────────
 
 function detectApi(company) {
@@ -87,17 +108,9 @@ function parseGreenhouse(json, companyName) {
 
 function parseAshby(json, companyName) {
   const jobs = json.jobs || [];
-  const INTERVAL_MULTIPLIERS = {
-    '1 HOUR': 2080,
-    '1 DAY': 260,
-    '1 WEEK': 52,
-    '1 MONTH': 12,
-    '1 YEAR': 1
-  };
 
   return jobs.map(j => {
     const compensation = Array.isArray(j.compensation) ? j.compensation : [];
-    // Find any salary compensation we can normalize
     const comp = compensation.find(c => c.compensationType === 'Salary' && INTERVAL_MULTIPLIERS[c.interval]);
     
     if (!comp) return { title: j.title || '', url: j.jobUrl || '', company: companyName, location: j.location || '', salary: null };
@@ -109,9 +122,9 @@ function parseAshby(json, companyName) {
       company: companyName,
       location: j.location || '',
       salary: { 
-        min: comp.minValue ? comp.minValue * mult : null, 
-        max: comp.maxValue ? comp.maxValue * mult : null, 
-        currency: comp.currencyCode 
+        min: comp.minValue != null ? comp.minValue * mult : null, 
+        max: comp.maxValue != null ? comp.maxValue * mult : null, 
+        currency: comp.currencyCode ?? null
       }
     };
   });
@@ -168,12 +181,7 @@ function buildLocationFilter(config) {
 
   return (location) => {
     const lower = (location || "").toLowerCase();
-    const remoteSynonyms = [
-      "remote", "distributed", "anywhere", "worldwide", "wfh", "work from home",
-      "wfa", "work from anywhere", "virtual", "telecommute", "location independent",
-      "flexible location"
-    ];
-    const isRemote = remoteSynonyms.some(s => lower.includes(s));
+    const isRemote = REMOTE_SYNONYMS.some(s => lower.includes(s));
 
     if (remoteOnly && !isRemote) return false;
     if (onsiteOnly && isRemote) return false;
