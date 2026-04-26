@@ -219,6 +219,8 @@ function buildLocationFilter(config) {
 }
 
 // ── Salary filter ───────────────────────────────────────────────────
+// Filters jobs based on user-defined salary range and currency.
+// Uses range-overlap logic and conservative defaults for missing data.
 
 function buildSalaryFilter(config) {
   const min = Number(config?.min) || 0;
@@ -226,24 +228,41 @@ function buildSalaryFilter(config) {
   const currency = config?.currency || "";
 
   return (salary) => {
-    if (min === 0 && max === 0) return true; 
-    if (!salary) return true; // Keep the job if salary data is missing (e.g. Greenhouse/Lever)
+    // If no salary constraints are configured, allow all jobs
+    if (min === 0 && max === 0) return true;
 
-    // Currency check (if both have currency, they must match)
+    // If salary data is missing, keep the job (conservative approach)
+    // Many job boards do not provide structured compensation data
+    if (!salary) return true;
+
+    // Enforce currency match when both user preference and job currency are present
+    // Reject mismatched currencies to avoid incorrect comparisons
     if (currency && salary.currency && currency !== salary.currency) {
-      return true; // Don't filter if currencies don't match (conservative)
+      return false;
     }
 
-    const jobMin = salary.min || salary.max || 0;
-    const jobMax = salary.max || salary.min || 0;
+    // Preserve full salary range (do not collapse to a single value)
+    // Fallback ensures we still handle cases where only one bound is provided
+    const jobMin = salary.min ?? salary.max ?? null;
+    const jobMax = salary.max ?? salary.min ?? null;
 
-    // Range-aware logic (CodeRabbit suggestion):
-    // If the job's TOP salary is below our MIN, discard.
-    if (min > 0 && jobMax > 0 && jobMax < min) return false;
-    
-    // If the job's BOTTOM salary is above our MAX, discard.
-    if (max > 0 && jobMin > 0 && jobMin > max) return false;
+    // If both bounds are missing, keep the job (cannot evaluate reliably)
+    if (jobMin == null && jobMax == null) return true;
 
+    // ── Range overlap logic ──
+    // Reject only if the job's range is completely outside the user-defined range
+
+    // Case 1: Job's maximum is below user's minimum → no overlap
+    if (min > 0 && jobMax != null && jobMax < min) {
+      return false;
+    }
+
+    // Case 2: Job's minimum is above user's maximum → no overlap
+    if (max > 0 && jobMin != null && jobMin > max) {
+      return false;
+    }
+
+    // Otherwise, ranges overlap → accept job
     return true;
   };
 }
